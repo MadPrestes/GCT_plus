@@ -1,0 +1,35 @@
+[
+    {
+        "Id":  "camera-230",
+        "Name":  "Intelbras iM7+ - 230",
+        "Manufacturer":  "Intelbras",
+        "Model":  "iM7+",
+        "Ip":  "10.3.29.230",
+        "HttpPort":  80,
+        "RtspPort":  554,
+        "Username":  "",
+        "PasswordProtected":  ""
+    },
+    {
+        "Id":  "camera-231",
+        "Name":  "Intelbras iM7+ - 231",
+        "Manufacturer":  "Intelbras",
+        "Model":  "iM7+",
+        "Ip":  "10.3.29.231",
+        "HttpPort":  80,
+        "RtspPort":  554,
+        "Username":  "admin",
+        "PasswordProtected":  "01000000d08c9ddf0115d1118c7a00c04fc297eb0100000069f61a033d05464287db6cea5facbaf50000000002000000000003660000c0000000100000000d749fe6b6b3a602940b106bf83881c30000000004800000a000000010000000093967f8de631cbc3d6ad8facde69d151800000022d37effb35cb6307b18e252e2162864bbf8660f92e02641140000003bf48300f60da84add8d4569e49588e6a46bc748"
+    },
+    {
+        "Id":  "camera-232",
+        "Name":  "Intelbras iM7+ - 232",
+        "Manufacturer":  "Intelbras",
+        "Model":  "iM7+",
+        "Ip":  "10.3.29.232",
+        "HttpPort":  80,
+        "RtspPort":  554,
+        "Username":  "",
+        "PasswordProtected":  ""
+    }
+]

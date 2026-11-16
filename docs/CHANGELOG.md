@@ -1,0 +1,33 @@
+# Changelog
+
+Alterações relevantes devem ser registradas em ordem cronológica inversa. Usar uma data ou versão somente quando definida pelo projeto; não inferir números de versão.
+
+## Não versionado
+
+### Ajuda PowerShell
+
+- Reposicionados os marcadores `DOC:` após os blocos de ajuda para que `Get-Help` reconheça `.SYNOPSIS` e `.DESCRIPTION` nas funções dos módulos.
+
+### Correção da interface
+
+- Exportados e disponibilizados no escopo do launcher os helpers de log/redação usados pelos callbacks Windows Forms, corrigindo `Write-GctUiLog` não encontrado.
+- Preparada a codificação UTF-8 com BOM dos scripts PowerShell para preservar acentos no Windows PowerShell 5.1.
+- Capturados explicitamente o estado da interface e os caminhos dos módulos nos callbacks, corrigindo `Join-Path` com `Path` nulo e a atualização de `ActiveOperation` ao clicar em ATUALIZAR.
+- Enter na caixa Senha aciona ATUALIZAR explicitamente (sem depender apenas do botão padrão do formulário). Respostas CGI de erro podem ser inspecionadas em DEBUG sem persistir o corpo no log.
+- Erros de operações em runspace agora exibem a mensagem da exceção interna, sem o invólucro confuso de `EndInvoke`; detalhes completos permanecem no DEBUG.
+- A seleção inicial da câmera agora preenche usuário e endpoint antes do primeiro teste.
+- DEBUG confirmou HTTP 400 com corpo `Error | Bad Request!` na leitura CGI e em tentativa Flip da unidade selecionada como iM7+; a URL de escrita exibiu o índice codificado como `%5B0%5D`, mas a causa e o estado final continuam não confirmados.
+
+### MVP inicial (integração física pendente)
+
+- Criados o launcher STA, GUI Windows Forms, módulos de rede/CGI/armazenamento e configuração inicial.
+- Implementados testes TCP/HTTP, parser VideoInOptions, alterações manuais com confirmação e releitura, montagem RTSP, abertura VLC e persistência DPAPI.
+- Adicionado teste local do parser; não foram executadas alterações em câmeras. Compatibilidade HTTP/CGI, VLC e operações por modelo ainda precisam de validação física.
+- Validação somente de leitura na unidade de teste: TCP 80/554 disponível, GET `/` HTTP 404 e CGI sem credenciais HTTP 401; detalhes sanitizados em `CAMERA-RESEARCH.md`. Nenhum `setConfig` foi enviado.
+
+### Documentação inicial
+
+- Criada a estrutura inicial de documentação técnica a partir dos caminhos e requisitos informados.
+- Marcados como pendentes de confirmação os detalhes que dependem do código-fonte, que não estava disponível durante a criação.
+- Adicionado o caderno de descobertas com o resultado informado para Intelbras iM7+ / `VideoInOptions`, distinguindo comportamento observado, documentado e hipóteses.
+- Registrada a regra de entrega conjunta de código e documentação e o procedimento PowerShell para verificar destinos de comentários `DOC:`.
