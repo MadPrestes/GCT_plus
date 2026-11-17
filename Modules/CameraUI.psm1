@@ -917,8 +917,22 @@ elseif ($Operation -eq 'Set') {
                 }
                 elseif ($result.Result.Accepted) {
                     $actualText = if ($null -eq $result.Result.ActualValue) { 'desconhecido' } else { $result.Result.ActualValue.ToString().ToLowerInvariant() }
-                    $uiState.StatusText.Text = 'AVISO — comando aceito, alteração não confirmada.'
-                    Write-GctUiLog -Level AVISO -CameraIp $result.Camera.Ip -Message ('Comando aceito, mas {0}={1} não foi confirmado; leitura atual: {2}.' -f $propertyLabel, $requested, $actualText)
+                    if (-not [string]::IsNullOrWhiteSpace($result.Result.VerificationError)) {
+                        $uiState.StatusText.Text = 'AVISO — comando aceito; falha ao confirmar. Confira a câmera antes de repetir.'
+                        Write-GctUiLog -Level AVISO -CameraIp $result.Camera.Ip -Message ('Comando {0}={1} aceito, mas a releitura falhou: {2}' -f $propertyLabel, $requested, $result.Result.VerificationError)
+                        if ($uiState.DebugCheck.Checked) {
+                            if ($result.Result.VerificationUri) {
+                                Write-GctUiLog -Level DEBUG -CameraIp $result.Camera.Ip -Message ('URL CGI da releitura: {0}' -f $result.Result.VerificationUri) -Persist:$false
+                            }
+                            if ($result.Result.VerificationResponseBody) {
+                                Write-GctUiLog -Level DEBUG -CameraIp $result.Camera.Ip -Message ('Resposta CGI da releitura: {0}' -f ($result.Result.VerificationResponseBody -replace "`r?`n", ' | ')) -Persist:$false
+                            }
+                        }
+                    }
+                    else {
+                        $uiState.StatusText.Text = 'AVISO — comando aceito, alteração não confirmada.'
+                        Write-GctUiLog -Level AVISO -CameraIp $result.Camera.Ip -Message ('Comando aceito, mas {0}={1} não foi confirmado; leitura atual: {2}.' -f $propertyLabel, $requested, $actualText)
+                    }
                 }
                 else {
                     $uiState.StatusText.Text = 'Alteração cancelada.'

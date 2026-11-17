@@ -14,6 +14,7 @@ GCT+ (Gorgeous Camera Tool) é um MVP Windows Forms para leitura e gerenciamento
 - `Modules/CameraUI.psm1`: GUI, operações assíncronas e abertura do VLC.
 - `logs/`: logs locais, ignorados pelo Git.
 - [tests/Test-IntelbrasParser.ps1](tests/Test-IntelbrasParser.ps1): teste local sem contato com câmera.
+- [tests/Test-IntelbrasCgiRequest.ps1](tests/Test-IntelbrasCgiRequest.ps1): teste local de formato CGI em loopback, sem contato com câmera.
 - `docs/`: documentação técnica.
 
 Os módulos e seus papéis estão implementados; limites de suporte por modelo/firmware continuam sujeitos a validação física.

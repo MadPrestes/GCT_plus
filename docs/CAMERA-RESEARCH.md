@@ -127,3 +127,15 @@ Na mesma validação, `Test-CameraTcpPort` conectou às portas TCP 80 (42 ms) e 
 - **Risco de alteração:** como nenhuma resposta de sucesso/releitura foi obtida, consultar o estado atual na câmera antes de repetir qualquer escrita.
 - **Status:** **CONFIRMADO** somente para as respostas HTTP 400 observadas nesta unidade; suporte ou alteração bem-sucedida não confirmados.
 - **Tipo de evidência:** **COMPORTAMENTO OBSERVADO** na captura fornecida pelo usuário.
+
+### Complemento — interface web aceita Flip
+
+- **Data:** 2026-11-17.
+- **Firmware informado:** `V2.800.00IB00L.0.R`; versão fornecida pelo usuário, não verificada diretamente.
+- **Relato:** o usuário confirmou que conseguiu alterar Flip pela interface web da câmera.
+- **URL informada:** `/cgi-bin/configManager.cgi?action=setConfig&VideoInOptions[0].Flip=false`, com colchetes literais. Método, status HTTP e corpo de resposta da chamada do navegador não foram fornecidos.
+- **Diferença identificada:** o GCT+ enviava o índice como `%5B0%5D`; um teste local de loopback confirmou que `HttpWebRequest` o codificava mesmo quando a URL de entrada tinha colchetes literais.
+- **Correção no GCT+:** preservar `[0]` literal nas escritas de Flip/Mirror. O teste de loopback confirma o formato da linha HTTP enviada, mas não confirma a resposta nem a compatibilidade desta câmera.
+- **Limite restante:** a consulta `getConfig&name=VideoInOptions` do GCT+ também havia retornado HTTP 400 e não usa colchetes. A escrita pode ser aceita sem que o GCT+ consiga verificar o valor; nesse caso, a interface apresenta aviso e recomenda conferir o estado na câmera antes de repetir.
+- **Status:** diferença de codificação identificada; correção ainda pendente de validação física no iM7+ com esse firmware.
+- **Tipo de evidência:** relato do usuário e teste local de loopback; sem nova requisição enviada à câmera.

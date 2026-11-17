@@ -56,7 +56,12 @@ function Invoke-IntelbrasCgiRequest {
     $builder.Port = [int]$Camera.HttpPort
     $builder.Path = '/cgi-bin/configManager.cgi'
     $builder.Query = $Query
-    $uri = $builder.Uri
+    $uriText = $builder.Uri.AbsoluteUri
+    if ($Query -match '^action=setConfig&VideoInOptions\[0\]\.(Flip|Mirror)=(true|false)$') {
+        # Preserve the CGI index syntax required by the camera firmware.
+        $uriText = $uriText.Replace('VideoInOptions%5B0%5D.', 'VideoInOptions[0].')
+    }
+    $uri = [System.Uri]::new($uriText, $true)
 
     $request = [System.Net.HttpWebRequest]::Create($uri)
     $request.Method = 'GET'
@@ -412,7 +417,7 @@ function Set-IntelbrasVideoOption {
         }
     }
 
-    $setting = [Uri]::EscapeDataString("VideoInOptions[0].$Name")
+    $setting = "VideoInOptions[0].$Name"
     $valueText = $Value.ToString().ToLowerInvariant()
     $response = Invoke-IntelbrasCgiRequest -Camera $Camera `
         -Query ("action=setConfig&{0}={1}" -f $setting, $valueText) `
@@ -430,14 +435,33 @@ function Set-IntelbrasVideoOption {
         throw $exception
     }
 
-    $actual = Get-IntelbrasVideoOptions -Camera $Camera -Credential $Credential `
-        -TimeoutMilliseconds $TimeoutMilliseconds
-    $actualValue = $actual.$Name
+    $actual = $null
+    $actualValue = $null
+    $verificationError = $null
+    $verificationUri = $null
+    $verificationResponseBody = $null
+    try {
+        $actual = Get-IntelbrasVideoOptions -Camera $Camera -Credential $Credential `
+            -TimeoutMilliseconds $TimeoutMilliseconds
+        $actualValue = $actual.$Name
+    }
+    catch {
+        $verificationError = $_.Exception.Message
+        if ($_.Exception.Data.Contains('RequestUri')) {
+            $verificationUri = [string]$_.Exception.Data['RequestUri']
+        }
+        if ($_.Exception.Data.Contains('ResponseBody')) {
+            $verificationResponseBody = [string]$_.Exception.Data['ResponseBody']
+        }
+    }
     [pscustomobject]@{
         Accepted       = $true
         Verified       = ($null -ne $actualValue -and [bool]$actualValue -eq $Value)
         RequestedValue = $Value
         ActualValue    = $actualValue
+        VerificationError = $verificationError
+        VerificationUri = $verificationUri
+        VerificationResponseBody = $verificationResponseBody
         Response       = $response.Body.Trim()
         Uri            = $response.Uri
         StatusCode     = $response.StatusCode

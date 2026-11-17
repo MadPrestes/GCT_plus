@@ -4,6 +4,12 @@ Alterações relevantes devem ser registradas em ordem cronológica inversa. Usa
 
 ## Não versionado
 
+### CGI Flip
+
+- Preservada a sintaxe literal `VideoInOptions[0]` ao enviar alterações de Flip/Mirror, conforme URL informada para a interface web da câmera.
+- Se a escrita responder `OK`, mas a leitura CGI de confirmação falhar, a interface agora informa que a operação foi aceita mas não confirmada, em vez de reportar uma falha total.
+- Adicionado teste local de loopback para validar os colchetes na linha HTTP; não houve conexão nem alteração em câmera.
+
 ### Ajuda PowerShell
 
 - Reposicionados os marcadores `DOC:` após os blocos de ajuda para que `Get-Help` reconheça `.SYNOPSIS` e `.DESCRIPTION` nas funções dos módulos.

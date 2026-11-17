@@ -6,7 +6,7 @@
 
 Na unidade testada em 2026-11-16, uma consulta CGI sem credenciais retornou HTTP 401. O esquema e a consulta com credenciais ainda não foram validados.
 
-Uma tentativa posterior pela interface na unidade selecionada como iM7+ retornou HTTP 400 tanto para a leitura `VideoInOptions` quanto para comandos de Flip. Com DEBUG habilitado, o corpo observado foi `Error | Bad Request!` para a leitura e para a escrita. A URL exibida para a escrita codificou o índice como `%5B0%5D`; isso é uma diferença observada, não uma causa confirmada, e não explica a falha da leitura. Consulte o registro em [CAMERA-RESEARCH.md](CAMERA-RESEARCH.md#intelbras-im7-http-400-em-videoinoptions). Não repetir escritas antes de confirmar o valor atual da câmera.
+Uma tentativa pela interface do GCT+ na unidade selecionada como iM7+ retornou HTTP 400 tanto para a leitura `VideoInOptions` quanto para comandos de Flip. Com DEBUG habilitado, o corpo observado foi `Error | Bad Request!`. A interface web da câmera, por outro lado, foi reportada como capaz de alterar Flip; a URL informada usa colchetes literais em `VideoInOptions[0]`. O cliente HTTP do Windows PowerShell escapava esses colchetes como `%5B0%5D`; o GCT+ agora preserva a forma literal para essas escritas. A correção foi testada somente em loopback, não na câmera. A falha de leitura `VideoInOptions` ainda precisa de diagnóstico separado. Consulte [CAMERA-RESEARCH.md](CAMERA-RESEARCH.md#intelbras-im7-http-400-em-videoinoptions) e não repita escritas sem confirmar o estado atual.
 
 ## Consulta de configuração
 
@@ -24,7 +24,7 @@ Não generalizar os campos observados para outros modelos ou firmwares.
 
 ### `flip`
 
-`Set-IntelbrasFlip` implementa os valores booleanos e exige ShouldProcess. Para o Intelbras iM7+, o [caderno de descobertas](CAMERA-RESEARCH.md#intelbras-im7-videoinoptions) registra a escrita de `Flip=false` como observada. Não generalizar esse resultado para outros modelos ou firmwares.
+`Set-IntelbrasFlip` implementa os valores booleanos e exige ShouldProcess. A escrita usa `VideoInOptions[0].Flip` com colchetes literais, conforme a URL informada para a interface web; o cliente HTTP envia a requisição sem recodificar esse índice. Para o Intelbras iM7+, o [caderno de descobertas](CAMERA-RESEARCH.md#intelbras-im7-videoinoptions) registra a escrita de `Flip=false` como observada. Não generalizar esse resultado para outros modelos ou firmwares.
 
 A interface apresenta confirmação explícita, exige resposta `OK` e faz releitura antes de anunciar sucesso. Alterar `Flip` modifica configuração da câmera; consulte também a seção de [risco de alteração](CAMERA-RESEARCH.md#risco-de-alteracao).
 
@@ -48,6 +48,6 @@ Resultados de testes por modelo devem ser registrados separadamente no [caderno 
 
 ## Implementação do MVP
 
-`Set-IntelbrasFlip` e `Set-IntelbrasMirror` enviam uma escrita somente após ShouldProcess permitir. A GUI exige confirmação explícita. A requisição precisa responder HTTP 200 e corpo `OK`; em seguida o app consulta novamente `VideoInOptions`. Sucesso é mostrado somente quando a releitura confirma o valor; caso contrário, mostra aviso.
+`Set-IntelbrasFlip` e `Set-IntelbrasMirror` enviam uma escrita somente após ShouldProcess permitir. A GUI exige confirmação explícita. A requisição precisa responder HTTP 200 e corpo `OK`; em seguida o app consulta novamente `VideoInOptions`. Sucesso é mostrado somente quando a releitura confirma o valor. Se a câmera aceitar a escrita mas a leitura de verificação falhar, o app informa que o comando foi aceito mas não confirmado, com o erro da releitura.
 
 O caderno registra `Flip=false` como observado no Intelbras iM7+. `Flip=true` também está listada entre as requisições observadas na descoberta original. As escritas de `Mirror` estão implementadas, mas ainda não testadas em câmera neste ambiente; não as considerar confirmadas.
