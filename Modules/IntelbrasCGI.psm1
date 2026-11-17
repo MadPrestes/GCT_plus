@@ -1,12 +1,141 @@
 ﻿Set-StrictMode -Version 2.0
 
+function Get-IntelbrasDigestAuthorizationHeader {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Challenge,
+
+        [Parameter(Mandatory = $true)]
+        [System.Uri]$Uri,
+
+        [Parameter(Mandatory = $true)]
+        [System.Net.NetworkCredential]$Credential
+    )
+
+    if ($Challenge -notmatch '^\s*Digest\s+(?<Parameters>.*)$') {
+        throw 'A câmera retornou um desafio Digest inválido.'
+    }
+
+    $parameters = @{}
+    $parameterPattern = '([a-zA-Z][a-zA-Z0-9_-]*)\s*=\s*(?:"((?:\\.|[^"])*)"|([^,\s]+))'
+    foreach ($match in [regex]::Matches($Matches.Parameters, $parameterPattern)) {
+        $value = if ($match.Groups[2].Success) {
+            $match.Groups[2].Value -replace '\\(["\\])', '$1'
+        }
+        else {
+            $match.Groups[3].Value
+        }
+        $parameters[$match.Groups[1].Value] = $value
+    }
+
+    if (-not $parameters.ContainsKey('realm') -or -not $parameters.ContainsKey('nonce')) {
+        throw 'O desafio Digest da câmera não contém realm ou nonce.'
+    }
+
+    $algorithm = 'MD5'
+    if ($parameters.ContainsKey('algorithm')) {
+        $algorithm = [string]$parameters['algorithm']
+    }
+    if ($algorithm -notin @('MD5', 'MD5-sess')) {
+        throw "Algoritmo Digest não suportado pela câmera: $algorithm."
+    }
+
+    $qop = $null
+    if ($parameters.ContainsKey('qop')) {
+        $qopOptions = @(([string]$parameters['qop']) -split '\s*,\s*')
+        if ($qopOptions -contains 'auth') {
+            $qop = 'auth'
+        }
+        else {
+            throw 'O desafio Digest da câmera não oferece qop=auth.'
+        }
+    }
+
+    $encoding = if ($parameters.ContainsKey('charset') -and $parameters['charset'] -eq 'UTF-8') {
+        [System.Text.Encoding]::UTF8
+    }
+    else {
+        [System.Text.Encoding]::GetEncoding(28591)
+    }
+    $hashText = {
+        param([string]$Text)
+        $md5 = [System.Security.Cryptography.MD5]::Create()
+        try {
+            $hash = $md5.ComputeHash($encoding.GetBytes($Text))
+            [System.BitConverter]::ToString($hash).Replace('-', '').ToLowerInvariant()
+        }
+        finally {
+            $md5.Dispose()
+        }
+    }
+
+    $username = [string]$Credential.UserName
+    $ha1 = & $hashText ('{0}:{1}:{2}' -f $username, $parameters['realm'], $Credential.Password)
+    $cnonce = $null
+    $nonceCount = $null
+    if ($null -ne $qop -or $algorithm -eq 'MD5-sess') {
+        $randomBytes = New-Object 'System.Byte[]' 16
+        $randomGenerator = [System.Security.Cryptography.RandomNumberGenerator]::Create()
+        try {
+            $randomGenerator.GetBytes($randomBytes)
+        }
+        finally {
+            $randomGenerator.Dispose()
+        }
+        $cnonce = [System.BitConverter]::ToString($randomBytes).Replace('-', '').ToLowerInvariant()
+    }
+    if ($algorithm -eq 'MD5-sess') {
+        $ha1 = & $hashText ('{0}:{1}:{2}' -f $ha1, $parameters['nonce'], $cnonce)
+    }
+
+    $requestTarget = $Uri.PathAndQuery
+    $ha2 = & $hashText ('{0}:{1}' -f 'GET', $requestTarget)
+    if ($null -ne $qop) {
+        $nonceCount = '00000001'
+        $responseHash = & $hashText ('{0}:{1}:{2}:{3}:{4}:{5}' -f `
+            $ha1, $parameters['nonce'], $nonceCount, $cnonce, $qop, $ha2)
+    }
+    else {
+        $responseHash = & $hashText ('{0}:{1}:{2}' -f $ha1, $parameters['nonce'], $ha2)
+    }
+
+    $quote = {
+        param([string]$Value)
+        $Value.Replace('\', '\\').Replace('"', '\"')
+    }
+    $parts = @(
+        ('username="{0}"' -f (& $quote $username)),
+        ('realm="{0}"' -f (& $quote ([string]$parameters['realm']))),
+        ('nonce="{0}"' -f (& $quote ([string]$parameters['nonce']))),
+        ('uri="{0}"' -f (& $quote $requestTarget)),
+        ('response="{0}"' -f $responseHash)
+    )
+    if ($parameters.ContainsKey('algorithm')) {
+        $parts += 'algorithm={0}' -f $algorithm
+    }
+    if ($null -ne $qop) {
+        $parts += @(
+            ('qop={0}' -f $qop),
+            ('nc={0}' -f $nonceCount),
+            ('cnonce="{0}"' -f $cnonce)
+        )
+    }
+    if ($parameters.ContainsKey('opaque')) {
+        $parts += 'opaque="{0}"' -f (& $quote ([string]$parameters['opaque']))
+    }
+
+    'Digest {0}' -f ($parts -join ', ')
+}
+
 <#
 .SYNOPSIS
 Faz uma requisição GET CGI à câmera sem incluir credenciais na URL.
 
 .DESCRIPTION
 Monta a URL com UriBuilder, envia a requisição com timeout e devolve o código
-HTTP, corpo e duração. Credenciais são fornecidas apenas por PSCredential.
+HTTP, corpo e duração. Responde manualmente a desafios Digest para garantir
+que o URI autenticado inclua a query CGI; outras autenticações usam o cliente
+HTTP do Windows.
 
 .PARAMETER Camera
 Objeto com Ip e HttpPort.
@@ -63,46 +192,85 @@ function Invoke-IntelbrasCgiRequest {
     }
     $uri = [System.Uri]::new($uriText, $true)
 
-    $request = [System.Net.HttpWebRequest]::Create($uri)
-    $request.Method = 'GET'
-    $request.Timeout = $TimeoutMilliseconds
-    $request.ReadWriteTimeout = $TimeoutMilliseconds
-    $request.AllowAutoRedirect = $false
-    $request.Proxy = $null
-    if ($null -ne $Credential) {
-        $request.Credentials = $Credential.GetNetworkCredential()
-        $request.PreAuthenticate = $true
-    }
-
     $stopwatch = [System.Diagnostics.Stopwatch]::StartNew()
     $response = $null
     $statusCode = $null
     $body = ''
     try {
-        try {
-            $response = [System.Net.HttpWebResponse]$request.GetResponse()
-        }
-        catch [System.Net.WebException] {
-            if ($null -eq $_.Exception.Response) {
-                throw
+        $authorizationHeader = $null
+        $useCredentialFallback = $false
+        for ($attempt = 0; $attempt -lt 3; $attempt++) {
+            $request = [System.Net.HttpWebRequest]::Create($uri)
+            $request.Method = 'GET'
+            $request.Timeout = $TimeoutMilliseconds
+            $request.ReadWriteTimeout = $TimeoutMilliseconds
+            $request.AllowAutoRedirect = $false
+            $request.Proxy = $null
+            if ($null -ne $authorizationHeader) {
+                $request.Headers['Authorization'] = $authorizationHeader
             }
-            $response = [System.Net.HttpWebResponse]$_.Exception.Response
-        }
+            elseif ($useCredentialFallback -and $null -ne $Credential) {
+                $request.Credentials = $Credential.GetNetworkCredential()
+                $request.PreAuthenticate = $true
+            }
 
-        $statusCode = [int]$response.StatusCode
-        $reader = New-Object System.IO.StreamReader($response.GetResponseStream())
-        try {
-            $body = $reader.ReadToEnd()
-        }
-        finally {
-            $reader.Dispose()
+            $response = $null
+            try {
+                try {
+                    $response = [System.Net.HttpWebResponse]$request.GetResponse()
+                }
+                catch [System.Net.WebException] {
+                    if ($null -eq $_.Exception.Response) {
+                        throw
+                    }
+                    $response = [System.Net.HttpWebResponse]$_.Exception.Response
+                }
+
+                $statusCode = [int]$response.StatusCode
+                if ($statusCode -eq 401 -and $null -ne $Credential -and $attempt -lt 2) {
+                    $digestChallenge = @($response.Headers.GetValues('WWW-Authenticate') |
+                        Where-Object { $_ -match '^\s*Digest\s+' } |
+                        Select-Object -First 1)
+                    if ($digestChallenge.Count -gt 0) {
+                        $authorizationHeader = Get-IntelbrasDigestAuthorizationHeader `
+                            -Challenge $digestChallenge[0] -Uri $uri `
+                            -Credential $Credential.GetNetworkCredential()
+                        $useCredentialFallback = $false
+                    }
+                    elseif (-not $useCredentialFallback) {
+                        $authorizationHeader = $null
+                        $useCredentialFallback = $true
+                    }
+                    else {
+                        $digestChallenge = @()
+                    }
+
+                    if ($digestChallenge.Count -gt 0 -or $useCredentialFallback) {
+                        $response.Close()
+                        $response = $null
+                        $request.Abort()
+                        continue
+                    }
+                }
+
+                $reader = New-Object System.IO.StreamReader($response.GetResponseStream())
+                try {
+                    $body = $reader.ReadToEnd()
+                }
+                finally {
+                    $reader.Dispose()
+                }
+                break
+            }
+            finally {
+                if ($null -ne $response) {
+                    $response.Close()
+                }
+                $request.Abort()
+            }
         }
     }
     finally {
-        if ($null -ne $response) {
-            $response.Close()
-        }
-        $request.Abort()
         $stopwatch.Stop()
     }
 
@@ -119,14 +287,15 @@ function Invoke-IntelbrasCgiRequest {
 Interpreta os parâmetros Flip e Mirror de uma resposta VideoInOptions.
 
 .DESCRIPTION
-Analisa somente as linhas table.VideoInOptions[0].Flip e Mirror, ignorando
-outros parâmetros. Propriedades ausentes permanecem nulas.
+Analisa todas as linhas table.VideoInOptions[0] para exibição e converte
+Flip e Mirror para booleano. Propriedades ausentes permanecem nulas.
 
 .PARAMETER ResponseText
 Texto retornado pelo endpoint CGI.
 
 .OUTPUTS
-PSCustomObject com Flip e Mirror booleanos ou nulos.
+PSCustomObject com Flip e Mirror booleanos ou nulos, além da lista Parameters
+com todos os nomes e valores recebidos.
 
 .EXAMPLE
 $options = ConvertFrom-IntelbrasVideoOptions -ResponseText $response
@@ -150,16 +319,25 @@ function ConvertFrom-IntelbrasVideoOptions {
         Flip   = $null
         Mirror = $null
     }
+    $parameters = @()
     foreach ($line in ($ResponseText -split "`r?`n")) {
-        if ($line -match '^\s*table\.VideoInOptions\[0\]\.(Flip|Mirror)\s*=\s*(true|false)\s*$') {
-            $key = $Matches[1]
-            $values[$key] = [System.Boolean]::Parse($Matches[2])
+        if ($line -match '^\s*table\.VideoInOptions\[0\]\.(?<Name>[^=]+?)\s*=\s*(?<Value>.*)\s*$') {
+            $name = $Matches.Name
+            $value = $Matches.Value
+            $parameters += [pscustomobject]@{
+                Name  = $name
+                Value = $value
+            }
+            if ($name -in @('Flip', 'Mirror') -and $value -match '^(true|false)$') {
+                $values[$name] = [System.Boolean]::Parse($value)
+            }
         }
     }
 
     [pscustomobject]@{
-        Flip   = $values.Flip
-        Mirror = $values.Mirror
+        Flip       = $values.Flip
+        Mirror     = $values.Mirror
+        Parameters = @($parameters)
     }
 }
 
@@ -227,6 +405,7 @@ function Get-IntelbrasVideoOptions {
     [pscustomobject]@{
         Flip                = $parsed.Flip
         Mirror              = $parsed.Mirror
+        Parameters          = $parsed.Parameters
         RawResponse         = $response.Body
         StatusCode          = $response.StatusCode
         Uri                 = $response.Uri

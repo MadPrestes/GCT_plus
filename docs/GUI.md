@@ -11,12 +11,12 @@ O MVP fornece:
 - inicialização por `Start-GCT+.bat` em STA e leitura de `cameras.json`;
 - seleção entre as três câmeras configuradas e campos de usuário/senha mascarada;
 - botões ATUALIZAR, Flip/Mirror true/false e abertura dos streams VLC;
-- painel de estado e log visual;
+- painel de estado, tabela de todos os campos CGI `VideoInOptions` e log visual em abas;
 - execução de operações de rede em runspace de trabalho.
 
 ## Tratamento de resultados
 
-O botão ATUALIZAR apresenta estados TCP HTTP, HTTP, TCP RTSP, Flip e Mirror. Testes não dependem de ICMP. Alterações CGI exigem confirmação e releitura; nenhuma escrita ocorre na inicialização.
+O botão ATUALIZAR apresenta estados TCP HTTP, HTTP, TCP RTSP, Flip e Mirror, além de preencher a aba `VideoInOptions` com cada parâmetro e valor retornado pela CGI. Testes não dependem de ICMP. Alterações CGI exigem confirmação e releitura; nenhuma escrita ocorre na inicialização.
 
 Consultar [rede](NETWORK.md), [CGI Intelbras](INTELBRAS-CGI.md), [RTSP](RTSP.md) e [segurança](SECURITY.md).
 

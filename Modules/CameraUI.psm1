@@ -506,23 +506,46 @@ function Start-GCTPlusUI {
     $statusText.AutoSize = $true
     $statusGroup.Controls.AddRange(@($httpStatus, $rtspStatus, $flipStatus, $mirrorStatus, $statusText))
 
-    $logLabel = New-Object System.Windows.Forms.Label
-    $logLabel.Text = 'Log de operações'
-    $logLabel.Location = New-Object System.Drawing.Point(16, 290)
-    $logLabel.AutoSize = $true
+    $viewTabs = New-Object System.Windows.Forms.TabControl
+    $viewTabs.Location = New-Object System.Drawing.Point(16, 290)
+    $viewTabs.Size = New-Object System.Drawing.Size(1045, 399)
+    $viewTabs.Anchor = 'Top, Bottom, Left, Right'
+
+    $optionsTab = New-Object System.Windows.Forms.TabPage
+    $optionsTab.Text = 'VideoInOptions'
+    $videoOptionsTable = New-Object System.Data.DataTable
+    [void]$videoOptionsTable.Columns.Add('Parâmetro', [string])
+    [void]$videoOptionsTable.Columns.Add('Valor', [string])
+    $videoOptionsGrid = New-Object System.Windows.Forms.DataGridView
+    $videoOptionsGrid.Dock = 'Fill'
+    $videoOptionsGrid.ReadOnly = $true
+    $videoOptionsGrid.AllowUserToAddRows = $false
+    $videoOptionsGrid.AllowUserToDeleteRows = $false
+    $videoOptionsGrid.AutoGenerateColumns = $true
+    $videoOptionsGrid.AutoSizeColumnsMode = 'Fill'
+    $videoOptionsGrid.RowHeadersVisible = $false
+    $videoOptionsGrid.SelectionMode = 'FullRowSelect'
+    $videoOptionsGrid.DataSource = $videoOptionsTable
+    $optionsTab.Controls.Add($videoOptionsGrid)
+
+    $logTab = New-Object System.Windows.Forms.TabPage
+    $logTab.Text = 'Log'
     $logBox = New-Object System.Windows.Forms.RichTextBox
-    $logBox.Location = New-Object System.Drawing.Point(16, 314)
-    $logBox.Size = New-Object System.Drawing.Size(1045, 375)
+    $logBox.Location = New-Object System.Drawing.Point(8, 8)
+    $logBox.Size = New-Object System.Drawing.Size(1015, 350)
     $logBox.Anchor = 'Top, Bottom, Left, Right'
     $logBox.ReadOnly = $true
     $logBox.WordWrap = $false
     $logBox.Font = New-Object System.Drawing.Font('Consolas', 9)
+    $logTab.Controls.Add($logBox)
+    [void]$viewTabs.TabPages.Add($optionsTab)
+    [void]$viewTabs.TabPages.Add($logTab)
 
     $form.Controls.AddRange(@(
         $cameraLabel, $cameraCombo, $ipLabel, $endpointText, $userLabel, $userBox,
         $passwordLabel, $passwordBox, $savePasswordCheck, $debugCheck, $saveButton,
         $updateButton, $flipTrueButton, $flipFalseButton, $mirrorTrueButton,
-        $mirrorFalseButton, $vlcMainButton, $vlcSubButton, $statusGroup, $logLabel, $logBox
+        $mirrorFalseButton, $vlcMainButton, $vlcSubButton, $statusGroup, $viewTabs
     ))
 
     $script:CameraUiState = @{
@@ -535,6 +558,8 @@ function Start-GCTPlusUI {
         SavePasswordCheck = $savePasswordCheck
         DebugCheck = $debugCheck
         LogBox = $logBox
+        VideoOptionsTable = $videoOptionsTable
+        VideoOptionsGrid = $videoOptionsGrid
         HttpStatus = $httpStatus
         RtspStatus = $rtspStatus
         FlipStatus = $flipStatus
@@ -695,6 +720,7 @@ elseif ($Operation -eq 'Set') {
         $uiState.RtspStatus.Text = 'RTSP: —'
         $uiState.FlipStatus.Text = 'Flip: —'
         $uiState.MirrorStatus.Text = 'Mirror: —'
+        $uiState.VideoOptionsTable.Rows.Clear()
         $uiState.Secrets = @()
     }.GetNewClosure())
     $cameraCombo.SelectedIndex = 0
@@ -750,6 +776,7 @@ elseif ($Operation -eq 'Set') {
         try {
             $camera = & $getOperationCamera
             $source = & $getSelectedCamera
+            $uiState.VideoOptionsTable.Rows.Clear()
             Write-GctUiLog -Level INFO -CameraIp $camera.Ip -Message ('Testando HTTP:{0}' -f $camera.HttpPort)
             Write-GctUiLog -Level INFO -CameraIp $camera.Ip -Message ('Testando RTSP:{0}' -f $camera.RtspPort)
             & $startOperation 'Refresh' $camera '' $false
@@ -863,6 +890,16 @@ elseif ($Operation -eq 'Set') {
                     Write-GctUiLog -Level AVISO -CameraIp $result.Camera.Ip -Message ('TCP RTSP:{0} indisponível: {1}' -f $result.RtspTcp.Port, $result.RtspTcp.Error)
                 }
                 if ($null -ne $result.Options) {
+                    $uiState.VideoOptionsTable.Rows.Clear()
+                    foreach ($parameter in @($result.Options.Parameters)) {
+                        if ($null -eq $parameter) {
+                            continue
+                        }
+                        $row = $uiState.VideoOptionsTable.NewRow()
+                        $row['Parâmetro'] = [string]$parameter.Name
+                        $row['Valor'] = [string]$parameter.Value
+                        [void]$uiState.VideoOptionsTable.Rows.Add($row)
+                    }
                     $uiState.FlipStatus.Text = 'Flip: {0}' -f $(if ($null -eq $result.Options.Flip) { 'não encontrado' } else { $result.Options.Flip.ToString().ToLowerInvariant() })
                     $uiState.MirrorStatus.Text = 'Mirror: {0}' -f $(if ($null -eq $result.Options.Mirror) { 'não encontrado' } else { $result.Options.Mirror.ToString().ToLowerInvariant() })
                     Write-GctUiLog -Level SUCESSO -CameraIp $result.Camera.Ip -Message ('VideoInOptions: Flip={0} | Mirror={1} | {2} ms' -f $result.Options.Flip, $result.Options.Mirror, $result.Options.ElapsedMilliseconds)
@@ -872,7 +909,7 @@ elseif ($Operation -eq 'Set') {
                         Write-GctUiLog -Level DEBUG -CameraIp $result.Camera.Ip -Message ('Resposta CGI: {0}' -f ($result.Options.RawResponse -replace "`r?`n", ' | ')) -Persist:$false
                         Write-GctUiLog -Level DEBUG -CameraIp $result.Camera.Ip -Message ('Parser: Flip={0}; Mirror={1}' -f $result.Options.Flip, $result.Options.Mirror) -Persist:$false
                     }
-                    $uiState.StatusText.Text = 'Leitura concluída.'
+                    $uiState.StatusText.Text = 'Leitura concluída: {0} parâmetro(s).' -f $uiState.VideoOptionsTable.Rows.Count
                 }
                 else {
                     $reason = if (-not $result.HttpTcp.Success) { 'TCP HTTP indisponível.' }

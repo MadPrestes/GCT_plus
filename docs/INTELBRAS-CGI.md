@@ -2,9 +2,9 @@
 
 ## Escopo e estado
 
-`Modules/IntelbrasCGI.psm1` implementa a consulta CGI e o parser dos campos `Flip` e `Mirror`. Autenticação aceita depende do desafio da câmera e ainda requer validação no equipamento/firmware usado.
+`Modules/IntelbrasCGI.psm1` implementa a consulta CGI e preserva todos os campos `VideoInOptions` para exibição; `Flip` e `Mirror` também são convertidos para booleanos para as ações existentes. A leitura Digest foi confirmada na unidade iM7+ configurada; outras câmeras/firmwares ainda precisam de validação.
 
-Na unidade testada em 2026-11-16, uma consulta CGI sem credenciais retornou HTTP 401. O esquema e a consulta com credenciais ainda não foram validados.
+Na unidade iM7+ configurada, a interface web confirmou autenticação HTTP Digest. Antes da correção, o GCT+ recebeu HTTP 400 e `Error | Bad Request!`. O loopback identificou que o `HttpWebRequest` do Windows PowerShell montava o campo `uri` do Digest sem a query. O GCT+ agora responde manualmente ao desafio incluindo caminho e query. A leitura pós-correção retornou HTTP 200 e 285 campos `VideoInOptions`; nenhuma escrita foi enviada. Não generalizar para outros modelos/firmwares.
 
 Uma tentativa pela interface do GCT+ na unidade selecionada como iM7+ retornou HTTP 400 tanto para a leitura `VideoInOptions` quanto para comandos de Flip. Com DEBUG habilitado, o corpo observado foi `Error | Bad Request!`. A interface web da câmera, por outro lado, foi reportada como capaz de alterar Flip; a URL informada usa colchetes literais em `VideoInOptions[0]`. O cliente HTTP do Windows PowerShell escapava esses colchetes como `%5B0%5D`; o GCT+ agora preserva a forma literal para essas escritas. A correção foi testada somente em loopback, não na câmera. A falha de leitura `VideoInOptions` ainda precisa de diagnóstico separado. Consulte [CAMERA-RESEARCH.md](CAMERA-RESEARCH.md#intelbras-im7-http-400-em-videoinoptions) e não repita escritas sem confirmar o estado atual.
 
@@ -14,9 +14,9 @@ Uma tentativa pela interface do GCT+ na unidade selecionada como iM7+ retornou H
 
 `Get-IntelbrasVideoOptions` consulta `configManager.cgi?action=getConfig&name=VideoInOptions` e converte as duas propriedades conhecidas para booleano ou nulo.
 
-O cliente usa GET, timeout padrão de 4 segundos e `HttpWebRequest.Credentials` quando há credencial. Para respostas diferentes de HTTP 200, URL e corpo limitado são disponibilizados somente no painel DEBUG, sem persistência:
+O cliente usa GET e timeout padrão de 4 segundos. Para o desafio Digest, calcula a resposta com o método e o caminho completo mais a query CGI; outros esquemas continuam usando a negociação do cliente HTTP do Windows. Para respostas diferentes de HTTP 200, URL e corpo limitado são disponibilizados somente no painel DEBUG, sem persistência:
 
-O endereço e a porta vêm do registro selecionado em `cameras.json`. A URL CGI não contém credenciais; `HttpWebRequest` recebe `NetworkCredential` opcional. Respostas diferentes de HTTP 200 são apresentadas como falha, e propriedades ausentes permanecem nulas.
+O endereço e a porta vêm do registro selecionado em `cameras.json`. A URL CGI não contém credenciais. Respostas diferentes de HTTP 200 são apresentadas como falha, e propriedades ausentes permanecem nulas.
 
 Não generalizar os campos observados para outros modelos ou firmwares.
 
@@ -38,7 +38,7 @@ Não apresentar a implementação como evidência de que o firmware aceita a alt
 
 ## Resposta e conversao
 
-`ConvertFrom-IntelbrasVideoOptions` procura as linhas `table.VideoInOptions[0].Flip=true|false` e `table.VideoInOptions[0].Mirror=true|false`, sem confundir propriedade ausente com `false`. A resposta bruta é retornada para DEBUG e não deve conter credenciais. O teste automatizado usa apenas resposta simulada e não contata a câmera.
+`ConvertFrom-IntelbrasVideoOptions` transforma cada linha `table.VideoInOptions[0].Nome=valor` em um par de parâmetro e valor, incluindo propriedades indexadas, para a tabela da interface. Também converte `Flip` e `Mirror` para booleanos sem confundir propriedade ausente com `false`. A GUI apresenta os pares em uma tabela somente de leitura. A resposta bruta é retornada para DEBUG e não deve conter credenciais. Os testes automatizados usam respostas simuladas/loopback e não contatam a câmera.
 
 ## Segurança e diagnóstico
 

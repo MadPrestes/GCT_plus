@@ -4,6 +4,12 @@ Alterações relevantes devem ser registradas em ordem cronológica inversa. Usa
 
 ## Não versionado
 
+### CGI Digest e tabela VideoInOptions
+
+- Corrigida a resposta ao desafio HTTP Digest para incluir o caminho e a query CGI no `uri` de autenticação; teste de loopback valida a resposta Digest completa.
+- A leitura `VideoInOptions` agora fornece todos os pares parâmetro/valor e a interface exibe-os em uma tabela somente de leitura.
+- A leitura autorizada na unidade iM7+ retornou HTTP 400 antes da correção e HTTP 200 com 285 campos depois dela; nenhuma escrita foi enviada.
+
 ### CGI Flip
 
 - Preservada a sintaxe literal `VideoInOptions[0]` ao enviar alterações de Flip/Mirror, conforme URL informada para a interface web da câmera.

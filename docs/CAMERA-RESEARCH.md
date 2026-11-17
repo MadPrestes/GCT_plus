@@ -139,3 +139,15 @@ Na mesma validação, `Test-CameraTcpPort` conectou às portas TCP 80 (42 ms) e 
 - **Limite restante:** a consulta `getConfig&name=VideoInOptions` do GCT+ também havia retornado HTTP 400 e não usa colchetes. A escrita pode ser aceita sem que o GCT+ consiga verificar o valor; nesse caso, a interface apresenta aviso e recomenda conferir o estado na câmera antes de repetir.
 - **Status:** diferença de codificação identificada; correção ainda pendente de validação física no iM7+ com esse firmware.
 - **Tipo de evidência:** relato do usuário e teste local de loopback; sem nova requisição enviada à câmera.
+
+### Complemento — autenticação Digest e erro de leitura no GCT+
+
+- **Data:** 2026-11-17.
+- **Endpoint:** `GET /cgi-bin/configManager.cgi?action=getConfig&name=VideoInOptions`.
+- **Evidência do navegador:** o usuário confirmou uma sequência HTTP 401 seguida de HTTP 200 com autenticação Digest; nenhum cookie foi observado. Valores de `Authorization`, nonce e resposta Digest não são registrados aqui.
+- **Teste autorizado no GCT+:** uma consulta de leitura usando a credencial salva por DPAPI retornou HTTP 400 e corpo `Error | Bad Request!`. Nenhuma escrita foi enviada nesse teste.
+- **Diagnóstico local:** um teste de loopback mostrou que o `HttpWebRequest` do Windows PowerShell formava o campo `uri` do Digest sem a query CGI, diferente da requisição do navegador, que inclui a query.
+- **Correção no GCT+:** a resposta Digest agora é calculada com o caminho e a query completos. O teste de loopback valida o campo `uri` e o hash Digest.
+- **Resultado pós-correção:** uma única leitura autorizada retornou HTTP 200 e 285 campos. Os valores da configuração não foram registrados neste caderno; nenhuma escrita foi enviada.
+- **Status:** leitura `VideoInOptions` confirmada nesta unidade e firmware; não generalizar para outros modelos/firmwares. As escritas seguem sem validação física pela aplicação.
+- **Tipo de evidência:** captura do navegador e logs fornecidos pelo usuário, uma leitura autorizada pré-correção e teste local de loopback pós-diagnóstico.
